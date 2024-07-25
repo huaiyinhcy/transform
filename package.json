@@ -1,25 +1,29 @@
 {
-  "name": "@huaiyinhcy/transform",
-  "version": "0.0.5",
-  "type": "module",
-  "main": "dist/index.cjs",
-  "module": "dist/index.js",
-  "files": [
-    "dist"
-  ],
-  "keywords": [
-    "transform"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "scripts": {
-    "test": "tsc src/index.ts && node index.js",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
-  },
-  "devDependencies": {
-    "typescript": "^5.2.2",
-    "vite": "^5.3.1"
-  }
+    "name": "@huaiyinhcy/transform",
+    "version": "1.0.1",
+    "type": "module",
+    "main": "dist/index.cjs",
+    "module": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "keywords": [
+        "transform"
+    ],
+    "publishConfig": {
+        "access": "public"
+    },
+    "scripts": {
+        "test": "tsc src/index.ts && node src/index.js",
+        "build": "tsc && vite build",
+        "preview": "vite preview"
+    },
+    "devDependencies": {
+        "@turf/turf": "^7.0.0",
+        "prettier": "^3.3.3",
+        "typescript": "^5.2.2",
+        "vite": "^5.3.1",
+        "vite-plugin-dts": "4.0.0-beta.0"
+    }
 }

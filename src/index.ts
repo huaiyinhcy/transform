@@ -1,15 +1,5 @@
-import * as turf from '@turf/turf';
-
-type Proj = 'merc' | 'wgs84' | 'gcj02' | 'bd09';
-type Lng = number;
-type Lat = number;
-type LngLat = [Lng, Lat];
-
-interface Opts {
-    lng: Lng;
-    lat: Lat;
-    proj: Proj;
-}
+import { toWgs84, toMercator, point } from '@turf/turf';
+import type { Lat, Lng, LngLat, Opts, Proj } from './types';
 
 const PI = Math.PI;
 const AXIS = 6378245.0;
@@ -49,63 +39,74 @@ function transformLng(x: number, y: number) {
     return ret;
 }
 
+const merc: any = {
+    toWgs84: (lngLat: LngLat): LngLat =>
+        (toWgs84(point(lngLat as any)) as any).geometry.coordinates as LngLat
+};
+const wgs84: any = {
+    toMerc: (lngLat: LngLat): LngLat =>
+        (toMercator(point(lngLat as any)) as any).geometry.coordinates as LngLat,
+    toGcj02: ([lng, lat]: LngLat): LngLat => {
+        if (!outOfChina([lng, lat])) {
+            const [dLng, dLat] = delta([lng, lat]);
+            lng += dLng;
+            lat += dLat;
+        }
+        return [lng, lat];
+    }
+};
+const gcj02: any = {
+    toWgs84: ([lng, lat]: LngLat): LngLat => {
+        if (!outOfChina([lng, lat])) {
+            const [dLng, dLat] = delta([lng, lat]);
+            lng -= dLng;
+            lat -= dLat;
+        }
+        return [lng, lat];
+    },
+    toBd09: ([lng, lat]: LngLat): LngLat => {
+        let x = lng;
+        let y = lat;
+        const z = Math.sqrt(x * x + y * y) + 0.00002 * Math.sin(y * X_PI);
+        const theta = Math.atan2(y, x) + 0.000003 * Math.cos(x * X_PI);
+        x = z * Math.cos(theta) + 0.0065;
+        y = z * Math.sin(theta) + 0.006;
+        return [x, y];
+    }
+};
+const bd09: any = {
+    toGcj02: ([lng, lat]: LngLat): LngLat => {
+        let x = lng - 0.0065;
+        let y = lat - 0.006;
+        const z = Math.sqrt(x * x + y * y) - 0.00002 * Math.sin(y * X_PI);
+        const theta = Math.atan2(y, x) - 0.000003 * Math.cos(x * X_PI);
+        x = z * Math.cos(theta);
+        y = z * Math.sin(theta);
+        return [x, y];
+    }
+};
+
+merc.toGcj02 = (lngLat: LngLat): LngLat => wgs84.toGcj02(merc.toWgs84(lngLat));
+merc.toBd09 = (lngLat: LngLat): LngLat => gcj02.toBd09(merc.toGcj02(lngLat));
+
+gcj02.toMerc = (lngLat: LngLat): LngLat => wgs84.toMerc(gcj02.toWgs84(lngLat));
+
+wgs84.toBd09 = (lngLat: LngLat): LngLat => gcj02.toBd09(wgs84.toGcj02(lngLat));
+
+bd09.toWgs84 = (lngLat: LngLat): LngLat => gcj02.toWgs84(bd09.toGcj02(lngLat));
+bd09.toMerc = (lngLat: LngLat): LngLat => wgs84.toMerc(bd09.toWgs84(lngLat));
+
+const transformFun = {
+    merc,
+    wgs84,
+    gcj02,
+    bd09
+};
+
 export default class Point {
     lng: Lng;
     lat: Lat;
     proj: Proj;
-
-    merc = {
-        toWgs84: (lngLat: LngLat): LngLat =>
-            turf.toMercator(turf.point(lngLat)).geometry.coordinates as LngLat,
-        toGcj02: (lngLat: LngLat): LngLat => this.wgs84.toGcj02(this.merc.toWgs84(lngLat)),
-        toBd09: (lngLat: LngLat): LngLat => this.gcj02.toBd09(this.merc.toGcj02(lngLat))
-    };
-    wgs84 = {
-        toMerc: (lngLat: LngLat): LngLat =>
-            turf.toWgs84(turf.point(lngLat)).geometry.coordinates as LngLat,
-        toGcj02: ([lng, lat]: LngLat): LngLat => {
-            if (!outOfChina([lng, lat])) {
-                const [dLng, dLat] = delta([lng, lat]);
-                lng += dLng;
-                lat += dLat;
-            }
-            return [lng, lat];
-        },
-        toBd09: (lngLat: LngLat): LngLat => this.gcj02.toBd09(this.wgs84.toGcj02(lngLat))
-    };
-    gcj02 = {
-        toMerc: (lngLat: LngLat): LngLat => this.wgs84.toMerc(this.gcj02.toWgs84(lngLat)),
-        toWgs84: ([lng, lat]: LngLat): LngLat => {
-            if (!outOfChina([lng, lat])) {
-                const [dLng, dLat] = delta([lng, lat]);
-                lng -= dLng;
-                lat -= dLat;
-            }
-            return [lng, lat];
-        },
-        toBd09: ([lng, lat]: LngLat): LngLat => {
-            let x = lng;
-            let y = lat;
-            const z = Math.sqrt(x * x + y * y) + 0.00002 * Math.sin(y * X_PI);
-            const theta = Math.atan2(y, x) + 0.000003 * Math.cos(x * X_PI);
-            x = z * Math.cos(theta) + 0.0065;
-            y = z * Math.sin(theta) + 0.006;
-            return [x, y];
-        }
-    };
-    bd09 = {
-        toMerc: (lngLat: LngLat): LngLat => this.wgs84.toMerc(this.bd09.toWgs84(lngLat)),
-        toGcj02: ([lng, lat]: LngLat): LngLat => {
-            let x = lng - 0.0065;
-            let y = lat - 0.006;
-            const z = Math.sqrt(x * x + y * y) - 0.00002 * Math.sin(y * X_PI);
-            const theta = Math.atan2(y, x) - 0.000003 * Math.cos(x * X_PI);
-            x = z * Math.cos(theta);
-            y = z * Math.sin(theta);
-            return [x, y];
-        },
-        toWgs84: (lngLat: LngLat): LngLat => this.gcj02.toWgs84(this.bd09.toGcj02(lngLat))
-    };
 
     constructor({ lng, lat, proj }: Opts) {
         this.lng = lng;
@@ -118,7 +119,7 @@ export default class Point {
             console.warn('坐标系无变化，返回原对象');
             return this;
         }
-        const [lng, lat] = this[this.proj].toMerc([this.lng, this.lat]);
+        const [lng, lat] = transformFun[this.proj].toMerc([this.lng, this.lat]);
         return new Point({ lng, lat, proj: 'merc' });
     }
 
@@ -127,7 +128,7 @@ export default class Point {
             console.warn('坐标系无变化，返回原对象');
             return this;
         }
-        const [lng, lat] = this[this.proj].toWgs84([this.lng, this.lat]);
+        const [lng, lat] = transformFun[this.proj].toWgs84([this.lng, this.lat]);
         return new Point({ lng, lat, proj: 'wgs84' });
     }
 
@@ -136,7 +137,7 @@ export default class Point {
             console.warn('坐标系无变化，返回原对象');
             return this;
         }
-        const [lng, lat] = this[this.proj].toGcj02([this.lng, this.lat]);
+        const [lng, lat] = transformFun[this.proj].toGcj02([this.lng, this.lat]);
         return new Point({ lng, lat, proj: 'gcj02' });
     }
 
@@ -145,7 +146,7 @@ export default class Point {
             console.warn('坐标系无变化，返回原对象');
             return this;
         }
-        const [lng, lat] = this[this.proj].toBd09([this.lng, this.lat]);
+        const [lng, lat] = transformFun[this.proj].toBd09([this.lng, this.lat]);
         return new Point({ lng, lat, proj: 'bd09' });
     }
 
@@ -159,5 +160,14 @@ export default class Point {
 
     toString(): string {
         return this.getLngLat().join(',');
+    }
+
+    static transform(lngLat: LngLat, from: Proj, to: Proj): LngLat {
+        const _to = `to${to[0].toLocaleUpperCase() + to.slice(1)}`;
+        try {
+            return transformFun?.[from]?.[_to]?.(lngLat);
+        } catch (e) {
+            throw new Error(`请确认参数是否正确 lngLat:${lngLat} from:${from} to:${to}`);
+        }
     }
 }
