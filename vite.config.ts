@@ -8,7 +8,7 @@ export default defineConfig({
         // 打包后的文件输出目录
         emptyOutDir: true,
         lib: {
-            entry: 'src',
+            entry: 'src/index.ts',
             fileName: 'index',
             name: '_transform',
             formats: ['umd', 'es', 'cjs']

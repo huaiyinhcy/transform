@@ -1,6 +1,6 @@
 {
     "name": "@huaiyinhcy/transform",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "type": "module",
     "main": "dist/index.cjs",
     "module": "dist/index.js",
@@ -9,8 +9,10 @@
         "dist"
     ],
     "keywords": [
-        "transform"
+        "webgis",
+        "坐标转换"
     ],
+    "repository": "https://github.com/huaiyinhcy/transform.git",
     "publishConfig": {
         "access": "public"
     },
