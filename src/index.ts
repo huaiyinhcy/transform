@@ -1,4 +1,4 @@
-import { toWgs84, toMercator, point } from '@turf/turf';
+import { point, toMercator, toWgs84 } from '@turf/turf';
 import type { Lat, Lng, LngLat, Opts, Proj } from './types';
 
 const PI = Math.PI;
@@ -39,11 +39,24 @@ function transformLng(x: number, y: number) {
     return ret;
 }
 
-const merc: any = {
-    toWgs84: (lngLat: LngLat): LngLat =>
-        (toWgs84(point(lngLat as any)) as any).geometry.coordinates as LngLat
+const merc: {
+    toWgs84: (lngLat: LngLat) => LngLat;
+    toGcj02: (lngLat: LngLat) => LngLat;
+    toBd09: (lngLat: LngLat) => LngLat;
+} = {
+    toWgs84: (lngLat: LngLat): LngLat => {
+        const t = toWgs84(point(lngLat)).geometry.coordinates;
+        return [t[0], t[1]];
+    },
+    toGcj02: (lngLat: LngLat): LngLat => wgs84.toGcj02(merc.toWgs84(lngLat)),
+    toBd09: (lngLat: LngLat): LngLat => gcj02.toBd09(merc.toGcj02(lngLat))
 };
-const wgs84: any = {
+
+const wgs84: {
+    toMerc: (lngLat: LngLat) => LngLat;
+    toGcj02: (lngLat: LngLat) => LngLat;
+    toBd09: (lngLat: LngLat) => LngLat;
+} = {
     toMerc: (lngLat: LngLat): LngLat =>
         (toMercator(point(lngLat as any)) as any).geometry.coordinates as LngLat,
     toGcj02: ([lng, lat]: LngLat): LngLat => {
@@ -53,9 +66,15 @@ const wgs84: any = {
             lat += dLat;
         }
         return [lng, lat];
-    }
+    },
+    toBd09: (lngLat: LngLat): LngLat => gcj02.toBd09(wgs84.toGcj02(lngLat))
 };
-const gcj02: any = {
+
+const gcj02: {
+    toMerc: (lngLat: LngLat) => LngLat;
+    toWgs84: (lngLat: LngLat) => LngLat;
+    toBd09: (lngLat: LngLat) => LngLat;
+} = {
     toWgs84: ([lng, lat]: LngLat): LngLat => {
         if (!outOfChina([lng, lat])) {
             const [dLng, dLat] = delta([lng, lat]);
@@ -72,9 +91,16 @@ const gcj02: any = {
         x = z * Math.cos(theta) + 0.0065;
         y = z * Math.sin(theta) + 0.006;
         return [x, y];
-    }
+    },
+    toMerc: (lngLat: LngLat): LngLat => wgs84.toMerc(gcj02.toWgs84(lngLat))
 };
-const bd09: any = {
+
+const bd09: {
+    toMerc: (lngLat: LngLat) => LngLat;
+    toWgs84: (lngLat: LngLat) => LngLat;
+    toGcj02: (lngLat: LngLat) => LngLat;
+} = {
+    toWgs84: (lngLat: LngLat): LngLat => gcj02.toWgs84(bd09.toGcj02(lngLat)),
     toGcj02: ([lng, lat]: LngLat): LngLat => {
         let x = lng - 0.0065;
         let y = lat - 0.006;
@@ -83,18 +109,9 @@ const bd09: any = {
         x = z * Math.cos(theta);
         y = z * Math.sin(theta);
         return [x, y];
-    }
+    },
+    toMerc: (lngLat: LngLat): LngLat => wgs84.toMerc(bd09.toWgs84(lngLat))
 };
-
-merc.toGcj02 = (lngLat: LngLat): LngLat => wgs84.toGcj02(merc.toWgs84(lngLat));
-merc.toBd09 = (lngLat: LngLat): LngLat => gcj02.toBd09(merc.toGcj02(lngLat));
-
-gcj02.toMerc = (lngLat: LngLat): LngLat => wgs84.toMerc(gcj02.toWgs84(lngLat));
-
-wgs84.toBd09 = (lngLat: LngLat): LngLat => gcj02.toBd09(wgs84.toGcj02(lngLat));
-
-bd09.toWgs84 = (lngLat: LngLat): LngLat => gcj02.toWgs84(bd09.toGcj02(lngLat));
-bd09.toMerc = (lngLat: LngLat): LngLat => wgs84.toMerc(bd09.toWgs84(lngLat));
 
 const transformFun = {
     merc,
@@ -103,7 +120,17 @@ const transformFun = {
     bd09
 };
 
-export default class Point {
+const transform = (lngLat: LngLat, from: Proj, to: Proj): LngLat => {
+    const _to = `to${to[0].toLocaleUpperCase() + to.slice(1)}`;
+    try {
+        // @ts-ignore
+        return transformFun[from][_to](lngLat);
+    } catch (e) {
+        throw new Error(`请确认参数是否正确 lngLat:${lngLat} from:${from} to:${to}`);
+    }
+};
+
+class Point {
     lng: Lng;
     lat: Lat;
     proj: Proj;
@@ -161,13 +188,6 @@ export default class Point {
     toString(): string {
         return this.getLngLat().join(',');
     }
-
-    static transform(lngLat: LngLat, from: Proj, to: Proj): LngLat {
-        const _to = `to${to[0].toLocaleUpperCase() + to.slice(1)}`;
-        try {
-            return transformFun?.[from]?.[_to]?.(lngLat);
-        } catch (e) {
-            throw new Error(`请确认参数是否正确 lngLat:${lngLat} from:${from} to:${to}`);
-        }
-    }
 }
+
+export { Point, transform, merc, wgs84, gcj02, bd09 };
